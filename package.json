@@ -6,6 +6,8 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^5.7.8",
-    "@capacitor/ios": "^5.7.8"
+    "@capacitor/ios": "^5.7.8",
+    "@vitejs/plugin-react": "^6.0.2",
+    "vite": "^8.0.16"
   }
 }
