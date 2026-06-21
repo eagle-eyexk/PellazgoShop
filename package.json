@@ -9,5 +9,9 @@
     "@capacitor/ios": "^5.7.8",
     "@vitejs/plugin-react": "^6.0.2",
     "vite": "^8.0.16"
+  },
+  "dependencies": {
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   }
 }
