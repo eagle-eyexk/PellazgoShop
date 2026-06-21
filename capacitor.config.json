@@ -1,0 +1,9 @@
+{
+  "appId": "com.pellazgo.app",
+  "appName": "Pellazgo",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  }
+}
