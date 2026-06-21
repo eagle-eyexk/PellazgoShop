@@ -7,7 +7,6 @@ workflows:
       node: 20
       xcode: latest
       cocoapods: default
-      # Use global code signing from Codemagic
       groups:
         - code-signing
     triggering:
@@ -20,26 +19,17 @@ workflows:
           npm install react react-dom
       
       - name: Build web app
-        script: |
-          npm run build
+        script: npm run build
       
-      - name: Sync Capacitor iOS
+      - name: Sync Capacitor and pods
         script: |
-          echo "🔄 Syncing Capacitor..."
           npx cap sync ios
-          
-          echo "📦 Installing CocoaPods dependencies..."
-          cd ios/App
-          pod install --repo-update
-          cd ../..
+          cd ios/App && pod install --repo-update && cd ../..
       
-      - name: Install provisioning profile
+      - name: Set up code signing
         script: |
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          # Copy from global code signing location
-          if [ -d "$CM_PROVISIONING_PROFILE_PATH" ]; then
-            cp "$CM_PROVISIONING_PROFILE_PATH"/*.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/ 2>/dev/null || true
-          fi
+          # Auto-select the correct provisioning profile
+          xcode-project use-profiles
       
       - name: Build and export IPA
         script: |
@@ -49,9 +39,12 @@ workflows:
           BUILD=$(( $(date +%s) - 1700000000 ))
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" App/Info.plist 2>/dev/null || true
           
-          # Build archive using global code signing
+          # Build archive with explicit team and signing
           xcodebuild -workspace App.xcworkspace -scheme App -configuration Release \
             -archivePath /Users/builder/build/App.xcarchive \
+            DEVELOPMENT_TEAM=H4QUDPK7S3 \
+            CODE_SIGN_STYLE=Manual \
+            PROVISIONING_PROFILE_SPECIFIER="Pellazgo" \
             archive
           
           test -d /Users/builder/build/App.xcarchive || exit 1
