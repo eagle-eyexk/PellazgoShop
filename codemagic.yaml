@@ -9,6 +9,13 @@ workflows:
       cocoapods: default
       groups:
         - code-signing
+      # Variables are now pulled from UI environment
+      vars:
+        BUNDLE_ID: "com.pellazgo.app"
+        TEAM_ID: "H4QUDPK7S3"
+        PROFILE_NAME: "Pellazgo"
+        ISSUER_ID: "6d7acece-2356-43c3-9946-6fd2cda5bf7d"
+        KEY_ID: "3FM3UY4ARQ"
     triggering:
       events: [push]
       branch_patterns: [{pattern: main}]
@@ -26,10 +33,14 @@ workflows:
           npx cap sync ios
           cd ios/App && pod install --repo-update && cd ../..
       
-      - name: Set up code signing
+      - name: Install provisioning profile
         script: |
-          # Auto-select the correct provisioning profile
-          xcode-project use-profiles
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles/
+          if [ -d "$CM_PROVISIONING_PROFILE_PATH" ]; then
+            cp -v "$CM_PROVISIONING_PROFILE_PATH"/*.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/ 2>/dev/null || true
+          fi
+          echo "📋 Available profiles:"
+          ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
       
       - name: Build and export IPA
         script: |
@@ -39,18 +50,21 @@ workflows:
           BUILD=$(( $(date +%s) - 1700000000 ))
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" App/Info.plist 2>/dev/null || true
           
-          # Build archive with explicit team and signing
+          # Auto-resolve provisioning profile
+          xcode-project use-profiles
+          
+          # Build archive with manual signing
           xcodebuild -workspace App.xcworkspace -scheme App -configuration Release \
             -archivePath /Users/builder/build/App.xcarchive \
-            DEVELOPMENT_TEAM=H4QUDPK7S3 \
+            DEVELOPMENT_TEAM=$TEAM_ID \
             CODE_SIGN_STYLE=Manual \
-            PROVISIONING_PROFILE_SPECIFIER="Pellazgo" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
             archive
           
           test -d /Users/builder/build/App.xcarchive || exit 1
           
           # Export IPA
-          cat > /Users/builder/ExportOptions.plist << 'PLIST'
+          cat > /Users/builder/ExportOptions.plist << PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -58,11 +72,11 @@ workflows:
               <key>method</key>
               <string>app-store</string>
               <key>teamID</key>
-              <string>H4QUDPK7S3</string>
+              <string>$TEAM_ID</string>
               <key>provisioningProfiles</key>
               <dict>
-                  <key>com.pellazgo.app</key>
-                  <string>Pellazgo</string>
+                  <key>$BUNDLE_ID</key>
+                  <string>$PROFILE_NAME</string>
               </dict>
           </dict>
           </plist>
@@ -77,6 +91,6 @@ workflows:
     publishing:
       app_store_connect:
         api_key: $APP_STORE_CONNECT_API_KEY
-        issuer_id: 6d7acece-2356-43c3-9946-6fd2cda5bf7d
-        key_id: RR98G82857
+        issuer_id: $ISSUER_ID
+        key_id: $KEY_ID
         submit_to_testflight: true
