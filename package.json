@@ -5,7 +5,7 @@
     "capacitor:sync": "npx cap sync ios"
   },
   "devDependencies": {
-    "@capacitor/cli": "^5.0.0",
-    "@capacitor/ios": "^5.0.0"
+    "@capacitor/cli": "^5.7.8",
+    "@capacitor/ios": "^5.7.8"
   }
 }
