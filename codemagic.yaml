@@ -5,7 +5,7 @@ workflows:
     max_build_duration: 120
     environment:
       node: 20
-      xcode: latest  # ✅ Now uses the latest Xcode version available
+      xcode: latest
       cocoapods: default
       groups:
         - code-signing
@@ -15,7 +15,8 @@ workflows:
     scripts:
       - name: Install and build
         script: |
-          npm ci --prefer-offline
+          # Use npm install instead of npm ci (no package-lock.json needed)
+          npm install
           npm run build
       - name: Sync and pod install
         script: |
