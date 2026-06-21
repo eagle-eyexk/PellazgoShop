@@ -1,55 +1,70 @@
-# codemagic.yaml
 workflows:
-  ios-workflow:
-    name: iOS Build - PellazgoShop
-    max_build_duration: 60
-    
+  ios-release:
+    name: iOS Release - PellazgoShop
+    instance_type: mac_mini_m1
+    max_build_duration: 120
     environment:
       node: 20
       xcode: 15.0
       cocoapods: default
-      vars:
-        APP_STORE_CONNECT_KEY_ID: "3FM3UY4ARQ"
-        # These variables are set in Codemagic UI Environment Variables
-        # APP_STORE_CONNECT_ISSUER_ID: [SET IN UI]
-        # APP_STORE_CONNECT_PRIVATE_KEY: [SET IN UI]
-        BUNDLE_ID: "com.pellazgo.app"
-        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
-        XCODE_SCHEME: "App"
-        TESTFLIGHT_GROUP: "Internal Testers"
-    
+      groups:
+        - code-signing
+    triggering:
+      events: [push]
+      branch_patterns: [{pattern: main}]
     scripts:
-      - name: Install dependencies
-        script: npm install
-      - name: Build web app
-        script: npm run build
-      - name: Copy to Capacitor
-        script: npx cap copy ios
-      - name: Sync Capacitor iOS
-        script: npx cap sync ios
-      - name: Auto-configure signing
-        script: xcode-project use-profiles
-      - name: Build IPA
+      - name: Install and build
         script: |
-          xcode-project build-ipa \
-            --workspace "$XCODE_WORKSPACE" \
-            --scheme "$XCODE_SCHEME"
-    
+          npm ci --prefer-offline
+          npm run build
+      - name: Sync and pod install
+        script: |
+          if [ ! -d "ios" ]; then npx cap add ios; fi
+          npx cap sync ios
+          cd ios/App && pod install --repo-update && cd ../..
+      - name: Install provisioning profile
+        script: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp signing/*.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
+      - name: Install certificate
+        script: |
+          security create-keychain -p build123 build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p build123 build.keychain
+          for p12 in signing/*.p12; do
+            security import "$p12" -k build.keychain -P "DqUvrZUt" -T /usr/bin/codesign
+          done
+          security set-key-partition-list -S apple-tool:,apple: -s -k build123 build.keychain
+      - name: Archive and export
+        script: |
+          cd ios/App
+          BUILD=$(( $(date +%s) - 1700000000 ))
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" App/Info.plist 2>/dev/null || true
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Release -archivePath /Users/builder/build/App.xcarchive DEVELOPMENT_TEAM=H4QUDPK7S3 CODE_SIGN_STYLE=Manual PROVISIONING_PROFILE_SPECIFIER="Pellazgo" archive
+          test -d /Users/builder/build/App.xcarchive || exit 1
+          cat > /Users/builder/ExportOptions.plist << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store</string>
+              <key>teamID</key>
+              <string>H4QUDPK7S3</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>com.pellazgo.app</key>
+                  <string>Pellazgo</string>
+              </dict>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath /Users/builder/build/App.xcarchive -exportPath /Users/builder/build -exportOptionsPlist /Users/builder/ExportOptions.plist
     artifacts:
-      - build/ios/ipa/*.ipa
-      - /tmp/xcodebuild_logs/*.log
-    
+      - /Users/builder/build/*.ipa
     publishing:
       app_store_connect:
-        api_key_id: "$APP_STORE_CONNECT_KEY_ID"
-        issuer_id: "$APP_STORE_CONNECT_ISSUER_ID"
-        key_p8: "$APP_STORE_CONNECT_PRIVATE_KEY"
+        api_key: $APP_STORE_CONNECT_API_KEY
+        issuer_id: 6d7acece-2356-43c3-9946-6fd2cda5bf7d
+        key_id: RR98G82857
         submit_to_testflight: true
-        beta_groups:
-          - "$TESTFLIGHT_GROUP"
-      email:
-        recipients:
-          - elgrandexx@icloud.com
-        notify:
-          success: true
-          failure: true
