@@ -5,7 +5,7 @@ workflows:
     max_build_duration: 120
     environment:
       node: 20
-      xcode: 15.0
+      xcode: latest  # ✅ Now uses the latest Xcode version available
       cocoapods: default
       groups:
         - code-signing
