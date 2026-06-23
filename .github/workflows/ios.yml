@@ -41,13 +41,10 @@ jobs:
           set -e
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp signing/*.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
-          curl -fsSL -o /tmp/pellazgo.p12 \
-            "https://github.com/eagle-eyexk/PellazgoShop/releases/download/signing-v2/pellazgo.p12"
-          ls -la /tmp/pellazgo.p12
           security create-keychain -p build123 build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p build123 build.keychain
-          security import /tmp/pellazgo.p12 -k build.keychain -P "Pellazgo" -T /usr/bin/codesign
+          security import signing/pellazgo.p12 -k build.keychain -P "Pellazgo" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k build123 build.keychain
           security find-identity -v -p codesigning build.keychain
           echo "SIGNING READY"
