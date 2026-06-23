@@ -58,7 +58,7 @@ jobs:
           security create-keychain -p build123 build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p build123 build.keychain
-          for pass in "PellazgoShop" "Pellazgo2026" "Pellazgo2026!" "dwvSVdum"; do
+          for pass in "PellazgoShop" "Pellazgo2026" "Pellazgo" "dwvSVdum"; do
             security import /tmp/pellazgo.p12 -k build.keychain -P "$pass" -T /usr/bin/codesign 2>/dev/null && { echo "PASSWORD: $pass"; break; }
           done
           security set-key-partition-list -S apple-tool:,apple: -s -k build123 build.keychain
