@@ -30,13 +30,9 @@ jobs:
           rm -rf ios
           npx cap add ios
           npx cap sync ios
-          # Fix signing identity — try both quoted and unquoted formats
           sed -i '' 's/CODE_SIGN_IDENTITY = "iPhone Developer";/CODE_SIGN_IDENTITY = "Apple Distribution";/g' ios/App/App.xcodeproj/project.pbxproj
           sed -i '' 's/CODE_SIGN_IDENTITY = iPhone Developer;/CODE_SIGN_IDENTITY = "Apple Distribution";/g' ios/App/App.xcodeproj/project.pbxproj
-          echo "=== Verification ==="
-          grep "CODE_SIGN_IDENTITY" ios/App/App.xcodeproj/project.pbxproj || echo "No matches — checking with context"
           grep -c "Apple Distribution" ios/App/App.xcodeproj/project.pbxproj && echo "FIX APPLIED" || echo "FIX NOT APPLIED"
-          # Privacy strings
           /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryUsageDescription string 'This app needs access to your photo library.'" ios/App/App/Info.plist 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string 'This app needs your location.'" ios/App/App/Info.plist 2>/dev/null || true
           cd ios/App && pod install --repo-update && cd ../..
@@ -50,10 +46,9 @@ jobs:
           security default-keychain -s build.keychain
           security unlock-keychain -p build123 build.keychain
           for p12 in signing/*.p12; do
-            security import "$p12" -k build.keychain -P "dwvSVdum" -T /usr/bin/codesign
+            security import "$p12" -k build.keychain -P "Pellazgo2026!" -T /usr/bin/codesign
           done
           security set-key-partition-list -S apple-tool:,apple: -s -k build123 build.keychain
-          echo "=== Installed identities ==="
           security find-identity -v -p codesigning build.keychain
 
       - name: Set build number
@@ -72,8 +67,7 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             PROVISIONING_PROFILE_SPECIFIER="Pellazgo Shop" \
             archive 2>&1 | tail -30
-          test -d build/PellazgoShop.xcarchive
-          echo "ARCHIVE SUCCEEDED"
+          test -d build/PellazgoShop.xcarchive && echo "ARCHIVE SUCCEEDED"
 
       - name: Export IPA
         run: |
@@ -94,8 +88,7 @@ jobs:
             -archivePath build/PellazgoShop.xcarchive \
             -exportPath build \
             -exportOptionsPlist ExportOptions.plist 2>&1 | tail -10
-          ls -la build/*.ipa
-          echo "EXPORT SUCCEEDED"
+          ls -la build/*.ipa && echo "EXPORT SUCCEEDED"
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
