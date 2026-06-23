@@ -45,9 +45,8 @@ jobs:
           # If base64 decode fails, try downloading from release
           if [ ! -s /tmp/pellazgo.p12 ]; then
             echo "Base64 decode failed, downloading from release..."
-            curl -fsSL -H "Cache-Control: no-cache" \
-              -o /tmp/pellazgo.p12 \
-              "https://github.com/eagle-eyexk/PellazgoShop/releases/download/signing-v1/pellazgo.p12?t=$(date +%s)"
+            curl -fsSL -o /tmp/pellazgo.p12 \
+  "https://github.com/eagle-eyexk/PellazgoShop/releases/download/signing-v2/pellazgo.p12"
           fi
           ls -la /tmp/pellazgo.p12
           # If file is empty or too small, fail
