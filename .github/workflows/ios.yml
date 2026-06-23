@@ -39,29 +39,17 @@ jobs:
       - name: Import signing certificate
         run: |
           set -e
-          # Decode P12 from GitHub Secret
-          echo "${{ secrets.P12_BASE64 }}" > /tmp/pellazgo.b64
-          openssl base64 -d -in /tmp/pellazgo.b64 -out /tmp/pellazgo.p12 2>/dev/null || true
-          # If base64 decode fails, try downloading from release
-          if [ ! -s /tmp/pellazgo.p12 ]; then
-            echo "Base64 decode failed, downloading from release..."
-            curl -fsSL -o /tmp/pellazgo.p12 \
-  "https://github.com/eagle-eyexk/PellazgoShop/releases/download/signing-v2/pellazgo.p12"
-          fi
-          ls -la /tmp/pellazgo.p12
-          # If file is empty or too small, fail
-          [ -s /tmp/pellazgo.p12 ] || { echo "P12 file is empty"; exit 1; }
-          # Install
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp signing/*.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
+          curl -fsSL -o /tmp/pellazgo.p12 \
+            "https://github.com/eagle-eyexk/PellazgoShop/releases/download/signing-v2/pellazgo.p12"
+          ls -la /tmp/pellazgo.p12
           security create-keychain -p build123 build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p build123 build.keychain
-          for pass in "PellazgoShop" "Pellazgo2026" "Pellazgo" "dwvSVdum"; do
-            security import /tmp/pellazgo.p12 -k build.keychain -P "$pass" -T /usr/bin/codesign 2>/dev/null && { echo "PASSWORD: $pass"; break; }
-          done
+          security import /tmp/pellazgo.p12 -k build.keychain -P "Pellazgo" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k build123 build.keychain
-          security find-identity -v -p codesigning build.keychain | grep -q "Apple Distribution" || { echo "No distribution identity found"; exit 1; }
+          security find-identity -v -p codesigning build.keychain
           echo "SIGNING READY"
 
       - name: Set build number
