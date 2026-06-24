@@ -1,5 +1,45 @@
+# Dependencies
 node_modules/
+.npm
+
+# Build outputs
 dist/
+build/
+
+# Environment
 .env
 .env.local
+.env.*.local
+.env.production
+
+# macOS
 .DS_Store
+**/.DS_Store
+
+# Xcode derived
+ios/App/DerivedData/
+ios/App/build/
+*.xcuserstate
+xcuserdata/
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.xcarchive
+DerivedData/
+
+# CocoaPods — installed at build time
+ios/App/Pods/
+ios/App/Podfile.lock
+
+# Signing secrets — NEVER commit
+signing/*.p12
+signing/*.p8
+signing/*.key
+signing/*.pem
+signing/*.cer
+signing/*.mobileprovision
+signing/*.csr
+
+# Capacitor
+.sourcemaps/
