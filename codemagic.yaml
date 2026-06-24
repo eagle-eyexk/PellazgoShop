@@ -1,117 +1,83 @@
 workflows:
-  pellazgo-ios-release:
-    name: Pellazgo iOS -> TestFlight
+  ios-release:
+    name: Pellazgo Shop iOS → TestFlight
     instance_type: mac_mini_m1
     max_build_duration: 120
-
     integrations:
       app_store_connect: pellazgo_asc
-
     environment:
-      node: 20
+      node: 22
       xcode: latest
       cocoapods: default
-      vars:
-        BUNDLE_ID: com.pellazgo.app
-        TEAM_ID: H4QUDPK7S3
-        APP_NAME: PellazgoShop
-        CODEMAGIC_API_KEY: J9k-poS1r5j7dmRc5lYGcg
-
+      groups:
+        - code-signing
     triggering:
       events:
         - push
       branch_patterns:
         - pattern: main
-          include: true
-
     scripts:
-      - name: Install and Build Web Assets
+      - name: Install dependencies
         script: |
           set -e
-          npm ci
+          npm install
           npm run build
-          test -f dist/index.html
-
-      - name: Capacitor Clean Sync
+      - name: Setup Capacitor iOS
         script: |
           set -e
           rm -rf ios
           npx cap add ios
           npx cap sync ios
-
-      - name: Configure Info.plist Permissions
-        script: |
-          PLIST=ios/App/App/Info.plist
-          /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'Pellazgo uses camera for profile photos'" "$PLIST" 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryUsageDescription string 'Pellazgo accesses photos for profile pictures'" "$PLIST" 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :NSFaceIDUsageDescription string 'Use Face ID to sign in quickly'" "$PLIST" 2>/dev/null || true
-
-      - name: Install CocoaPods
+          find ios -name "project.pbxproj" -exec sed -i '' 's/CODE_SIGN_IDENTITY = "iPhone Developer";/CODE_SIGN_IDENTITY = "Apple Distribution";/g' {} \;
+          /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryUsageDescription string 'Photo access'" ios/App/App/Info.plist 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string 'Location access'" ios/App/App/Info.plist 2>/dev/null || true
+          cd ios/App && pod install --repo-update && cd ../..
+      - name: Install signing assets
         script: |
           set -e
-          cd ios/App
-          pod install --repo-update
-
-      - name: Verify Xcode Scheme
-        script: |
-          cd ios/App && xcodebuild -list -workspace App.xcworkspace
-
-      - name: Set Build Number
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp signing/*.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
+          security create-keychain -p build123 build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p build123 build.keychain
+          for p12 in signing/*.p12; do
+            security import "$p12" -k build.keychain -P "Pellazgo" -T /usr/bin/codesign
+          done
+          security set-key-partition-list -S apple-tool:,apple: -s -k build123 build.keychain
+      - name: Set build number
         script: |
           BUILD=$(( $(date +%s) - 1700000000 ))
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" ios/App/App/Info.plist
-
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" ios/App/App/Info.plist 2>/dev/null || true
       - name: Archive
         script: |
           set -e
           cd ios/App
-          xcodebuild -workspace App.xcworkspace -scheme App -configuration Release clean || true
-          xcodebuild \
-            -workspace App.xcworkspace \
-            -scheme App \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -archivePath $CM_BUILD_DIR/build/PellazgoShop.xcarchive \
-            DEVELOPMENT_TEAM=H4QUDPK7S3 \
-            CODE_SIGN_STYLE=Automatic \
-            -allowProvisioningUpdates \
-            clean archive
-          test -d $CM_BUILD_DIR/build/PellazgoShop.xcarchive
-
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Release -archivePath /Users/builder/build/PellazgoShop.xcarchive DEVELOPMENT_TEAM=H4QUDPK7S3 CODE_SIGN_STYLE=Manual PROVISIONING_PROFILE_SPECIFIER="Pellazgo Shop" archive
+          test -d /Users/builder/build/PellazgoShop.xcarchive || exit 1
       - name: Export IPA
         script: |
           set -e
-          cat > /tmp/ExportOptions.plist << 'PLIST'
+          cat > /Users/builder/ExportOptions.plist << 'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
-            <key>method</key><string>app-store</string>
-            <key>teamID</key><string>H4QUDPK7S3</string>
-            <key>signingStyle</key><string>automatic</string>
-            <key>destination</key><string>upload</string>
-            <key>uploadSymbols</key><true/>
+              <key>method</key>
+              <string>app-store</string>
+              <key>teamID</key>
+              <string>H4QUDPK7S3</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>com.pellazgo.app</key>
+                  <string>Pellazgo Shop</string>
+              </dict>
           </dict>
           </plist>
           PLIST
-          xcodebuild -exportArchive \
-            -archivePath $CM_BUILD_DIR/build/PellazgoShop.xcarchive \
-            -exportPath $CM_BUILD_DIR/build \
-            -exportOptionsPlist /tmp/ExportOptions.plist \
-            -allowProvisioningUpdates
-
+          xcodebuild -exportArchive -archivePath /Users/builder/build/PellazgoShop.xcarchive -exportPath /Users/builder/build -exportOptionsPlist /Users/builder/ExportOptions.plist
     artifacts:
-      - $CM_BUILD_DIR/build/*.ipa
-      - $CM_BUILD_DIR/build/*.dSYM.zip
-
+      - /Users/builder/build/*.ipa
     publishing:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
-        expire_build_submitted_for_review: true
-      email:
-        recipients:
-          - info@pellazgo.com
-        notify:
-          success: true
-          failure: true
