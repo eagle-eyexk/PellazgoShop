@@ -1,95 +1,39 @@
-name: Pellazgo Shop iOS — Auto Publish
+name: Validate Web Build
 
 on:
   push:
-    branches: ["main"]
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
-  build:
-    name: Build, Sign & Upload to TestFlight
-    runs-on: macos-latest
-
+  build-check:
+    name: Verify Web Build
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
+          cache: npm
 
       - name: Install dependencies
-        run: |
-          set -e
-          npm install
-          npm run build
+        run: npm ci
 
-      - name: Setup Capacitor iOS
-        run: |
-          set -e
-          rm -rf ios
-          npx cap add ios
-          npx cap sync ios
-          sed -i '' 's/CODE_SIGN_IDENTITY = "iPhone Developer";/CODE_SIGN_IDENTITY = "Apple Distribution";/g' ios/App/App.xcodeproj/project.pbxproj
-          sed -i '' 's/CODE_SIGN_IDENTITY = iPhone Developer;/CODE_SIGN_IDENTITY = "Apple Distribution";/g' ios/App/App.xcodeproj/project.pbxproj
-          /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryUsageDescription string 'Photo access'" ios/App/App/Info.plist 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string 'Location access'" ios/App/App/Info.plist 2>/dev/null || true
-          cd ios/App && pod install --repo-update && cd ../..
+      - name: Build web assets
+        run: npm run build
 
-      - name: Import signing certificate
+      - name: Verify dist output
         run: |
-          set -e
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp signing/*.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
-          security create-keychain -p build123 build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p build123 build.keychain
-          security import signing/pellazgo.p12 -k build.keychain -P "Pellazgo" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k build123 build.keychain
-          security find-identity -v -p codesigning build.keychain
-          echo "SIGNING READY"
+          test -f dist/index.html || { echo "dist/index.html missing"; exit 1; }
+          echo "Build OK - $(ls dist | wc -l | tr -d ' ') files in dist/"
 
-      - name: Set build number
-        run: |
-          BUILD=$(( $(date +%s) - 1700000000 ))
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" ios/App/App/Info.plist
-
-      - name: Archive
-        run: |
-          set -e
-          xcodebuild -workspace ios/App/App.xcworkspace \
-            -scheme App \
-            -configuration Release \
-            -archivePath build/PellazgoShop.xcarchive \
-            DEVELOPMENT_TEAM=H4QUDPK7S3 \
-            CODE_SIGN_STYLE=Manual \
-            PROVISIONING_PROFILE_SPECIFIER="Pellazgo Shop" \
-            archive 2>&1 | tail -20
-          test -d build/PellazgoShop.xcarchive && echo "ARCHIVE SUCCEEDED"
-
-      - name: Export IPA
-        run: |
-          set -e
-          cat > ExportOptions.plist << 'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0"><dict>
-            <key>method</key><string>app-store</string>
-            <key>teamID</key><string>H4QUDPK7S3</string>
-            <key>provisioningProfiles</key>
-            <dict>
-              <key>com.pellazgo.app</key><string>Pellazgo Shop</string>
-            </dict>
-          </dict></plist>
-          PLIST
-          xcodebuild -exportArchive \
-            -archivePath build/PellazgoShop.xcarchive \
-            -exportPath build \
-            -exportOptionsPlist ExportOptions.plist 2>&1 | tail -10
-          ls -la build/*.ipa && echo "EXPORT SUCCEEDED"
-
-      - name: Upload IPA artifact
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PellazgoShop.ipa
-          path: build/*.ipa
+          name: web-dist
+          path: dist/
+          retention-days: 1
